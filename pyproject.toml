@@ -9,3 +9,9 @@ dependencies = [
     "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.30.6",
 ]
+
+[tool.uv]
+dev-dependencies = [
+    "isort>=5.13.2",
+    "mypy>=1.11.2",
+]
