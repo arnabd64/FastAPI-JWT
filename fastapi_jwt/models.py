@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 import ulid
 from pydantic import BaseModel
@@ -19,6 +19,7 @@ class Users(SQLModel, table=True):
     password: Annotated[bytes, Field()]
     
     # metadata
+    active: Annotated[bool, Field(True)]
     created_on: Annotated[datetime, Field(nullable=False, default_factory=currentUTCTime)]
     last_login: Annotated[datetime, Field(nullable=False, default_factory=currentUTCTime)]
     
@@ -37,8 +38,8 @@ class Salts(SQLModel, table=True):
 
 class NewUserForm(BaseModel):
     
-    first_name: str
-    last_name: str
+    first_name: Annotated[str, Field(...)]
+    last_name: Annotated[Optional[str], Field(None)]
     username: Annotated[str, Field(min_length=8, max_length=24)]
     password: Annotated[str, Field(min_length=16, max_length=32)]
     
@@ -50,6 +51,23 @@ class NewUserForm(BaseModel):
                     "last_name": "Sharma",
                     "username": "sharma.Rajiv.3957",
                     "password": "r@J1v_$H4rM4-(#)!"
+                }
+            ]
+        }
+    }
+
+
+class AccessToken(BaseModel):
+    
+    access_token: str
+    token_type: Literal["Bearer"]
+    
+    model_config = {
+        "json_schema_extra" : {
+            "examples": [
+                {
+                    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+                    "token_type": "Bearer"
                 }
             ]
         }
