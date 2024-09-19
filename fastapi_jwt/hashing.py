@@ -5,6 +5,8 @@ from typing import Optional, Tuple, Dict
 import jwt
 from datetime import datetime, timezone, timedelta
 
+# TODO: Checkout RS256
+# TODO: Use Environment variables to store JWT parameters
 TOKEN_LIFESPAN = 300
 SECRET = "727FC49123C0D17296E26FFFEDDB09799156C5943A4A9F6294FEB7A4585AA640"
 ALGORITHM = "HS256"
@@ -67,3 +69,17 @@ def issueJSONWebToken(username: str, *, headers: Optional[Dict[str, str]] = None
         "exp": exp
     }
     return jwt.encode(payload, key=SECRET, algorithm=ALGORITHM, headers=headers)
+
+
+def decodeJSONWebToken(token: str) -> Optional[Dict[str, str]]:
+    try:
+        payload = jwt.decode(
+            token,
+            key = SECRET,
+            algorithms = [ALGORITHM],
+            verify = True,
+            leeway = timedelta(seconds=TOKEN_LIFESPAN)
+        )
+    except jwt.PyJWTError:
+        return None
+    return payload

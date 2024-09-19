@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from .models import Salts, Users, currentUTCTime
 
 connectionUrl = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///auth.db")
-asyncEngine = AsyncEngine(sql.create_engine(connectionUrl, echo=True))
+asyncEngine = AsyncEngine(sql.create_engine(connectionUrl, echo=False))
 
 async def initDatabase():
     async with asyncEngine.begin() as conn:

@@ -1,5 +1,6 @@
 import contextlib
 from typing import Annotated
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, FastAPI, status
 from fastapi.exceptions import HTTPException
@@ -50,7 +51,7 @@ async def create_new_user(form: NewUserForm, session: SessionDependency):
     - __201__: Successfully created the user
     - __409__: Existing User attempting to Sign Up
     - __422__: Invalid value passed through Body Params
-    - __500__: Undocumented Error
+    - __500__: Undocumented Internal Error
     """
     # check if username exists in 
     userExistsFlag = await database.usernameExists(form.username, session)
@@ -103,7 +104,7 @@ async def user_login(form: LoginForm, session: SessionDependency):
     ---------
     - __200__: User Authentication was Successful and Generated an Access Token
     - __401__: User Authentication Failed
-    - __500__: Undocumented Error
+    - __500__: Undocumented Internal Error
     """
     # check if the user exists
     userExistsFlag = await database.usernameExists(form.username, session)
@@ -138,11 +139,23 @@ async def user_login(form: LoginForm, session: SessionDependency):
     return AccessToken(access_token=token, token_type="Bearer")
 
 
-@router.head("/verify/token")
-async def verify_json_web_token():
-    return
-
-
 @router.get("/users/me")
 async def current_user(token: JSONWebToken):
-    pass
+    """
+    Endpoint to verify a JSON Web Token and retrieve
+    the username from the Token
+    
+    Arguments:
+    ----------
+    - `token`: JSON Web Token passed as a Header
+    
+    Responses:
+    ----------
+    - __200__: JSON Web Token was successfully decoded
+    - __500__: Undocumented Internal Error
+    """
+    payload = hashing.decodeJSONWebToken(token)
+    return {
+        "username": payload.get("sub"),
+        "issued": datetime.fromtimestamp(payload.get("iat"), timezone.utc).strftime(r"%Y-%m-%d %M:%M:%S %Z")
+    }
