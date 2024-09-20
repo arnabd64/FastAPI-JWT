@@ -1,22 +1,21 @@
 from datetime import datetime
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, ByteString
 
+from sqlalchemy import CHAR, BLOB
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel
-
 from .hashing import currentUTCDateTime, randomULID
-
 
 class Users(SQLModel, table=True):
     __tablename__ = "users"
 
     user_id: Annotated[
-        Optional[bytes], Field(primary_key=True, default_factory=randomULID)
+        Optional[str], Field(primary_key=True, default_factory=randomULID, sa_type=CHAR(32))
     ]
     first_name: Annotated[str, Field(...)]
     last_name: Annotated[Optional[str], Field(None, nullable=True)]
     username: Annotated[str, Field(unique=True)]
-    password: Annotated[bytes, Field(...)]
+    password: Annotated[bytes, Field(sa_type=BLOB(256))]
 
     # metadata
     active: Annotated[Optional[bool], Field(True)]
@@ -28,10 +27,10 @@ class Salts(SQLModel, table=True):
     __tablename__ = "salts"
 
     salt_id: Annotated[
-        Optional[bytes], Field(primary_key=True, default_factory=randomULID)
+        Optional[str], Field(primary_key=True, default_factory=randomULID, sa_type=CHAR(32))
     ]
-    salt: Annotated[bytes, Field(unique=True)]
-    user_id: Annotated[bytes, Field(foreign_key="users.user_id")]
+    salt: Annotated[bytes, Field(sa_type=BLOB(256))]
+    user_id: Annotated[str, Field(sa_type=CHAR(32), foreign_key="users.user_id")]
 
     # metadata
     created_on: Annotated[

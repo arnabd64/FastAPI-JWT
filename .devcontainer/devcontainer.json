@@ -18,6 +18,7 @@
 		"vscode": {
 			"extensions": [
 				"tamasfe.even-better-toml",
+				"eamodio.gitlens",
 				"gruntfuggly.todo-tree"
 			]
 		}

@@ -2,18 +2,19 @@ import hashlib
 import hmac
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple, Any
+from typing import Any, Dict, Optional, Tuple
 
 import jwt
-import ulid
+from ulid import ULID
 
 
-def currentUTCDateTime() -> datetime:
+def currentUTCDateTime():
     return datetime.now(timezone.utc)
 
 
-def randomULID() -> bytes:
-    return ulid.ULID().bytes
+def randomULID():
+    """Generates a 32 character long ULID"""
+    return ULID().hex
 
 
 def tokenLifeSpan(lifespan: int = 30) -> Tuple[float, float]:
