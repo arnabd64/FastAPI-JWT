@@ -25,10 +25,12 @@
 	},
 
 	"remoteEnv": {
-		"DATABASE_URL": "sqlite+aiosqlite:///auth.db",
+		"DATABASE_URL": "mysql+asyncmy://authenticator:secure-password@172.17.0.2:3306/auth",
 		"JWT_ALGORITHM": "HS256",
 		"JWT_SECRET": "727FC49123C0D17296E26FFFEDDB09799156C5943A4A9F6294FEB7A4585AA640",
-		"JWT_LIFESPAN": "30"
+		"JWT_LIFESPAN": "300",
+		"AUTH_ROUTER_PREFIX": "/auth",
+		"TOKEN_ENDPOINT": "/token"
 	}
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.

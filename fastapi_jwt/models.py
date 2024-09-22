@@ -1,16 +1,19 @@
 from datetime import datetime
-from typing import Annotated, Literal, Optional, ByteString
+from typing import Annotated, Literal, Optional
 
-from sqlalchemy import CHAR, BLOB
 from pydantic import BaseModel
+from sqlalchemy import BLOB, CHAR
 from sqlmodel import Field, SQLModel
+
 from .hashing import currentUTCDateTime, randomULID
+
 
 class Users(SQLModel, table=True):
     __tablename__ = "users"
 
     user_id: Annotated[
-        Optional[str], Field(primary_key=True, default_factory=randomULID, sa_type=CHAR(32))
+        Optional[str],
+        Field(primary_key=True, default_factory=randomULID, sa_type=CHAR(32)),
     ]
     first_name: Annotated[str, Field(...)]
     last_name: Annotated[Optional[str], Field(None, nullable=True)]
@@ -27,7 +30,8 @@ class Salts(SQLModel, table=True):
     __tablename__ = "salts"
 
     salt_id: Annotated[
-        Optional[str], Field(primary_key=True, default_factory=randomULID, sa_type=CHAR(32))
+        Optional[str],
+        Field(primary_key=True, default_factory=randomULID, sa_type=CHAR(32)),
     ]
     salt: Annotated[bytes, Field(sa_type=BLOB(256))]
     user_id: Annotated[str, Field(sa_type=CHAR(32), foreign_key="users.user_id")]
@@ -44,8 +48,8 @@ class Salts(SQLModel, table=True):
 class NewUserForm(BaseModel):
     first_name: Annotated[str, Field(...)]
     last_name: Annotated[Optional[str], Field(None)]
-    username: Annotated[str, Field(min_length=8, max_length=24)]
-    password: Annotated[str, Field(min_length=16, max_length=32)]
+    username: Annotated[str, Field(min_length=8)]
+    password: Annotated[str, Field(min_length=16)]
 
     model_config = {
         "json_schema_extra": {

@@ -1,7 +1,9 @@
 import contextlib
-from typing import Annotated
+from typing import Annotated, Any, Dict
+import os
 
 from fastapi import APIRouter, Depends, FastAPI, status
+from fastapi.responses import PlainTextResponse
 from fastapi.exceptions import HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -10,8 +12,8 @@ from fastapi_jwt import database, hashing
 
 from .models import AccessToken, NewUserForm, Salts, Users
 
-PREFIX = "/auth"
-
+PREFIX = os.getenv("AUTH_ROUTER_PREFIX", "/auth")
+TOKEN_ENDPOINT = os.getenv("TOKEN_ENDPOINT", "/token")
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,36 +22,31 @@ async def lifespan(app: FastAPI):
 
 
 # Dependency Injections
-OAuth2Flow = OAuth2PasswordBearer(tokenUrl=f"{PREFIX}/login")
+OAuth2Flow = OAuth2PasswordBearer(tokenUrl=f"{PREFIX}{TOKEN_ENDPOINT}")
 DatabaseSession = Annotated[AsyncSession, Depends(database.newSession)]
 OAuth2LoginForm = Annotated[OAuth2PasswordRequestForm, Depends()]
 JSONWebToken = Annotated[str, Depends(OAuth2Flow)]
 
 # Exceptions
-InvalidCredentials = HTTPException(
-    status.HTTP_401_UNAUTHORIZED, "invalid username/password"
-)
-InvalidJSONWebToken = HTTPException(
-    status.HTTP_401_UNAUTHORIZED, "invalid bearer token"
-)
-ExpiredJSONWebToken = HTTPException(
-    status.HTTP_403_FORBIDDEN, "bearer token has expired"
-)
-UserExists = HTTPException(status.HTTP_409_CONFLICT, "username already exists")
+InvalidCredentials = HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
+InvalidToken = HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid bearer token")
+ExpiredToken = HTTPException(status.HTTP_403_FORBIDDEN, "bearer token expired")
+UserExists = HTTPException(status.HTTP_409_CONFLICT, "username exists")
+InactiveUser = HTTPException(status.HTTP_403_FORBIDDEN, "user inactive")
 
 
 router = APIRouter(prefix=PREFIX, lifespan=lifespan, tags=["Authentication"])
 
 
-@router.post("/users/new", status_code=status.HTTP_201_CREATED)
-async def create_new_user(form: NewUserForm, session: DatabaseSession):
+@router.post("/create-user", status_code=status.HTTP_201_CREATED, response_class=PlainTextResponse)
+async def create_new_user(form: NewUserForm, session: DatabaseSession) -> str:
     """
     Description:
     ------------
     Endpoint for new user signup.
 
     Body Parameters:
-    ------------
+    ----------------
     - `first_name`: (_string_) First name of the User
     - `last_name` : (_string_) [**Optional**] Last name of the User
     - `username`  : (_string_) username that will be used for future logins
@@ -77,15 +74,14 @@ async def create_new_user(form: NewUserForm, session: DatabaseSession):
         username=form.username,
         password=hashed_password,
     )
-
     entrySalt = Salts(salt=salt, user_id=entryUsers.user_id)
 
     await database.updateDatabaseWithNewUser(entryUsers, entrySalt, session)
 
-    return {"username": form.username}
+    return form.username
 
 
-@router.post("/login", response_model=AccessToken)
+@router.post(TOKEN_ENDPOINT, response_model=AccessToken)
 async def user_login(form: OAuth2LoginForm, session: DatabaseSession):
     """
     Description:
@@ -118,7 +114,7 @@ async def user_login(form: OAuth2LoginForm, session: DatabaseSession):
 
     # verify user is active
     if not user.active:
-        raise HTTPException(status.HTTP_403_FORBIDDEN)
+        raise InactiveUser
 
     await database.updateLoginTimestamp(user.username, session)
 
@@ -127,7 +123,7 @@ async def user_login(form: OAuth2LoginForm, session: DatabaseSession):
     return AccessToken(access_token=token, token_type="Bearer")
 
 
-@router.get("/users/me")
+@router.get("/who-am-i", response_class=PlainTextResponse)
 async def current_user(token: JSONWebToken):
     """
     Endpoint to verify a JSON Web Token and retrieve
@@ -146,13 +142,34 @@ async def current_user(token: JSONWebToken):
     """
     payload = hashing.decodeJSONWebToken(token)
     if payload is None:
-        raise InvalidJSONWebToken
+        raise InvalidToken
 
     if payload["exp"] <= hashing.currentUTCDateTime().timestamp():
-        raise ExpiredJSONWebToken
+        raise ExpiredToken
 
-    return {
-        "username": payload["sub"],
-        "issued": hashing.decodeTimestamp(payload["iat"]),
-        "expiry": hashing.decodeTimestamp(payload["exp"]),
-    }
+    return PlainTextResponse(
+        payload['sub'],
+        headers = {"X-Token-Expiry": hashing.decodeTimestamp(payload["exp"])}
+    )
+
+
+@router.get("/extend-token", response_model=AccessToken)
+async def renew_json_web_token(token: JSONWebToken):
+    """
+    Endpoint to reissue a valid JSON Web Token
+
+    Arguments:
+    ----------
+    - `token`: JSON Web Token passes a Header
+
+    Response:
+    ---------
+    - __200__: Bearer token was renewed
+    """
+    # get the payload
+    payload = await current_user(token)
+
+    # generate a new token
+    token = hashing.issueJSONWebToken(payload['sub'])
+
+    return AccessToken(access_token=token, token_type="Bearer")

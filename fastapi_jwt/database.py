@@ -2,6 +2,7 @@ import os
 from typing import Tuple
 
 import sqlmodel as sql
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -9,10 +10,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from .hashing import currentUTCDateTime
 from .models import Salts, Users
 
-# connectionUrl = os.getenv("DATABASE_URL", "mysql+asyncmy://arnabd64:secure-password@172.17.0.2:3306/auth")
-connectionUrl = "mysql+asyncmy://arnabd64:secure-password@172.17.0.2:3306/auth"
-asyncEngine = AsyncEngine(sql.create_engine(connectionUrl, echo=True))
-
+connectionUrl = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///auth.db")
+asyncEngine = AsyncEngine(sql.create_engine(connectionUrl, echo=False))
 
 async def initDatabase():
     async with asyncEngine.begin() as conn:
@@ -20,9 +19,24 @@ async def initDatabase():
 
 
 async def newSession():
-    asyncSession = sessionmaker(asyncEngine, class_=AsyncSession, expire_on_commit=True)
-    async with asyncSession() as session:
+    # create a new session
+    asyncSession = sessionmaker(
+        asyncEngine,
+        class_ = AsyncSession,
+        expire_on_commit = False
+    )
+
+    session = asyncSession()
+    try:
         yield session
+        _ = await session.commit()
+
+    except SQLAlchemyError as e:
+        await session.rollback()
+        raise e
+
+    finally:
+        _ = await session.close()
 
 
 async def usernameExists(username: str, session: AsyncSession) -> bool:
@@ -38,11 +52,9 @@ async def usernameExists(username: str, session: AsyncSession) -> bool:
     --------
     - `bool`: True if username exists, else False
     """
-    query = sql.select(Users.username).filter(Users.username == username)
-    async with session.begin():
-        results = await session.exec(query)
-    results = results.fetchmany()
-    return len(results) > 0
+    query = sql.select(Users).filter(Users.username == username)
+    results = await session.scalar(query)
+    return results is not None
 
 
 async def retrieveUser(username: str, session: AsyncSession) -> Tuple[Users, Salts]:
@@ -63,8 +75,7 @@ async def retrieveUser(username: str, session: AsyncSession) -> Tuple[Users, Sal
         .join(Salts, Users.user_id == Salts.user_id)
         .filter(Users.username == username)
     )
-    async with session.begin():
-        results = await session.exec(query)
+    results = await session.exec(query)
     return results.fetchone()
 
 
@@ -77,19 +88,11 @@ async def updateLoginTimestamp(username: str, session: AsyncSession) -> None:
         .where(Users.username == username)
         .values({"last_login": currentUTCDateTime()})
     )
+    _ = await session.exec(query)
+
+
+async def updateDatabaseWithNewUser(user: Users, salt: Salts, session: AsyncSession) -> None:
     async with session.begin():
-        results = await session.exec(query)
-    print(results)
-
-
-async def updateDatabaseWithNewUser(
-    user: Users, salt: Salts, session: AsyncSession
-) -> None:
-    # build the queries
-    user_query = sql.insert(Users).values(**user.model_dump())
-    salt_query = sql.insert(Salts).values(**salt.model_dump())
-
-    # execute them
-    async with session.begin():
-        _ = await session.exec(user_query)
-        _ = await session.exec(salt_query)
+        session.add(user)
+        session.add(salt)
+        await session.commit()
